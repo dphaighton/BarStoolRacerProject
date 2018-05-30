@@ -25,7 +25,7 @@
 #define LCD5 11
 #define LCD6 12
 
-#define CIRC 1.5//circumfrence
+#define CIRC 0.5//circumfrence in metres
 
 //the data required for an async delay
 struct ADelay
@@ -49,21 +49,21 @@ pinMode(HBUTTON,INPUT);
 pinMode(TRIGHT,INPUT);
 pinMode(TLEFT,INPUT);
 
-lcd.begin(16,2);
+lcd.begin(16,0x02);
 motor.attach(VICTOR);
 
 Serial.begin(9600);
 }
 
-ADelay flashDelay={0,1000};
-ADelay buttonDelay={0,100};
+ADelay flashDelay={0,600};
+ADelay buttonDelay={0,300};
 ADelay encoderDelay={0,150};
 ADelay dT={0,0};
 
 //if the delay is over
 bool AOkay(ADelay& ad)
 {
-  return (ad.last+ad.wait>=millis());
+  return (ad.last+ad.wait<=millis());
 }
 
 //reset the time on it
@@ -84,57 +84,77 @@ void loop()
   //if the arduino can flash again
   if(AOkay(flashDelay))
   {
-    invertBit(lightData,32);
+    invertBit(lightData,0x20);
     resetDelay(flashDelay);
   }
-
+  
+  
   //deals with all the button inputs
   if(AOkay(buttonDelay))//button delay bc I dont want it to trigger twice and cancel
   {
+    
     if(digitalRead(HBUTTON))
     {
       invertBit(lightData,16);
-      digitalWrite(HEADLIGHT,lightData&16==16);
+      digitalWrite(HEADLIGHT,(lightData&16)==16);
       resetDelay(buttonDelay);  
+      
     }
     if(digitalRead(TLEFT))
     {
-      invertBit(lightData,1);
+      invertBit(lightData,0x01);
       resetDelay(buttonDelay);
     }
     if(digitalRead(TRIGHT))
     {
-      invertBit(lightData,2);
+      
+      invertBit(lightData,0x02);
       resetDelay(buttonDelay);
     }
   }
   
-  
- 
   //deal with turning lights
-  digitalWrite(LEFTBACK, (lightData&4!=0||lightData&33==33));
-  digitalWrite(RIGHTBACK,(lightData&8!=0||lightData&34==34));
+  digitalWrite(LEFTBACK, ((lightData&4)!=0||(lightData&33)==33));
+  digitalWrite(RIGHTBACK,((lightData&8)!=0||(lightData&34)==34));
   
   motorSpeed = digitalRead(EBRAKE)?0.0f:(float)(analogRead(THROTTLE)/1023.0f);
   motor.write((float)(90*(motorSpeed+1)));
-  Serial.println((float)motorSpeed);
   
-  if(analogRead(ENCODER)>=0&&AOkay(encoderDelay))
+  if(digitalRead(ENCODER)&&AOkay(encoderDelay))
   {
-    dT.wait = millis()-dT.last;
+  dT.wait = millis()-dT.last;
   readSpeed = (float)((CIRC*3600)/(dT.wait));
   dT.last = millis();
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print(String(motorSpeed*100)+"%");
+  lcd.print(String(motorSpeed*100.0f)+"%");
   lcd.setCursor(0,1);
   lcd.print(String(readSpeed)+" km/h");
-  }
+
   
+  }
+  Serial.println(String(digitalRead(A0)));
 }
 
 void invertBit(byte& b, byte n)
 {
-  b+=(b&n==0)?n:(-n);
+ if((b&n)==n)
+ {
+  b-=n;
+  } 
+  else
+  {
+    b|=n;
+  }
+}
+
+void printByte(byte b)
+{
+  
+  for(int i=128;i>=1;i/=2)
+  {
+    Serial.print((b|i)==b?1:0);
+  }
+  Serial.print("\n");
 }
 
